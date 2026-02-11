@@ -16,19 +16,20 @@ module ActsAsTenant
         polymorphic_type = valid_options[:foreign_type] || ActsAsTenant.polymorphic_type
         belongs_to tenant, scope, **valid_options
 
+        associated_class_name = reflect_on_all_associations(:belongs_to).find { |association| association.foreign_key == fkey }.class_name
+
         default_scope lambda {
           if ActsAsTenant.should_require_tenant? && ActsAsTenant.current_tenant.nil? && !ActsAsTenant.unscoped?
             raise ActsAsTenant::Errors::NoTenantSet
           end
 
-          associated_class_name = reflect_on_all_associations(:belongs_to).find { |association| association.foreign_key == fkey }.class_name
-          should_scope_tenant = options[:polymorphic] || ActsAsTenant.current_tenant.class.name == associated_class_name
+          should_scope_tenant = options[:polymorphic] || ActsAsTenant.current_tenant.is_a?(associated_class_name.constantize)
 
           if ActsAsTenant.current_tenant && !should_scope_tenant
-            Rails.logger.warn(
+            Rails.logger.debug {
               "[ActsAsTenant] Current tenant is an instance of #{ActsAsTenant.current_tenant.class}, but #{name} expects #{associated_class_name}. " \
               "Tenant scoping is being skipped for #{name}."
-            )
+            }
           end
 
           if ActsAsTenant.current_tenant && should_scope_tenant
