@@ -1,9 +1,8 @@
-Acts As Tenant
-==============
+# Acts As Tenant
 
-[![Build Status](https://travis-ci.org/ErwinM/acts_as_tenant.svg)](https://travis-ci.org/ErwinM/acts_as_tenant)
+[![Build Status](https://github.com/ErwinM/acts_as_tenant/workflows/Tests/badge.svg)](https://github.com/ErwinM/acts_as_tenant/actions) [![Gem Version](https://badge.fury.io/rb/acts_as_tenant.svg)](https://badge.fury.io/rb/acts_as_tenant)
 
-**Note**: acts_as_tenant was introduced in this [blog post](https://github.com/ErwinM/acts_as_tenant/blob/master/docs/blog_post.md).
+Row-level multitenancy for Ruby on Rails apps.
 
 This gem was born out of our own need for a fail-safe and out-of-the-way manner to add multi-tenancy to our Rails app through a shared database strategy, that integrates (near) seamless with Rails.
 
@@ -16,9 +15,26 @@ In addition, acts_as_tenant:
 * adds a method to validate uniqueness to a tenant, `validates_uniqueness_to_tenant`
 * sets up a helper method containing the current tenant
 
+**Note**: acts_as_tenant was introduced in this [blog post](https://github.com/ErwinM/acts_as_tenant/blob/master/docs/blog_post.md).
+
+**Row-level vs schema multitenancy**
+
+What's the difference?
+
+Row-level multitenancy  each model must have a tenant ID column on it. This makes it easy to filter records for each tenant using your standard database columns and indexes. ActsAsTenant uses row-level multitenancy.
+
+Schema multitenancy uses database schemas to handle multitenancy. For this approach, your database has multiple schemas and each schema contains your database tables. Schemas require migrations to be run against each tenant and generally makes it harder to scale as you add more tenants. The Apartment gem uses schema multitenancy.
+
+#### 🎬 Walkthrough
+
+Want to see how it works? Check out [the ActsAsTenant walkthrough video](https://www.youtube.com/watch?v=BIyxM9f8Jus):
+
+<a href="https://www.youtube.com/watch?v=BIyxM9f8Jus">
+<img src="https://i.imgur.com/DLRPzhv.png" width="300" height="auto" alt="ActsAsTenant Walkthrough Video">
+</a>
+
 Installation
 ------------
-acts_as_tenant will only work on Rails 3.1 and up. This is due to changes made to the handling of `default_scope`, an essential pillar of the gem.
 
 To use it, add it to your Gemfile:
 
@@ -28,6 +44,7 @@ gem 'acts_as_tenant'
 
 Getting started
 ===============
+
 There are two steps in adding multi-tenancy to your app with acts_as_tenant:
 
 1. setting the current tenant and
@@ -35,13 +52,16 @@ There are two steps in adding multi-tenancy to your app with acts_as_tenant:
 
 Setting the current tenant
 --------------------------
+
 There are three ways to set the current tenant:
 
 1. by using the subdomain to lookup the current tenant,
 2. by setting  the current tenant in the controller, and
 3. by setting the current tenant for a block.
 
-### Use the subdomain to lookup the current tenant ###
+### Looking Up Tenants
+
+#### By Subdomain to lookup the current tenant
 
 ```ruby
 class ApplicationController < ActionController::Base
@@ -49,11 +69,23 @@ class ApplicationController < ActionController::Base
 end
 ```
 
-This tells acts_as_tenant to use the current subdomain to identify the current tenant. In addition, it tells acts_as_tenant that tenants are represented by the Account model and this model has a column named 'subdomain' which can be used to lookup the Account using the actual subdomain. If ommitted, the parameters will default to the values used above.
+This tells acts_as_tenant to use the last subdomain to identify the current tenant. In addition, it tells acts_as_tenant that tenants are represented by the Account model and this model has a column named 'subdomain' which can be used to lookup the Account using the actual subdomain. If ommitted, the parameters will default to the values used above.
 
-Alternatively, you could locate the tenant using the method `set_current_tenant_by_subdomain_or_domain( :account, :subdomain,  :domain )` which will try to match a record first by subdomain. in case it fails, by domain.
+By default, the *last* subdomain will be used for lookup. Pass in `subdomain_lookup: :first` to use the first subdomain instead.
 
-### Setting the current tenant in a controller, manually ###
+#### By Domain to lookup the current tenant
+
+```ruby
+class ApplicationController < ActionController::Base
+  set_current_tenant_by_subdomain_or_domain(:account, :subdomain, :domain)
+end
+```
+
+You can locate the tenant using `set_current_tenant_by_subdomain_or_domain( :account, :subdomain,  :domain )` which will check for a subdomain and fallback to domain.
+
+By default, the *last* subdomain will be used for lookup. Pass in `subdomain_lookup: :first` to use the first subdomain instead.
+
+#### Manually using before_action
 
 ```ruby
 class ApplicationController < ActionController::Base
@@ -69,8 +101,23 @@ end
 
 Setting the `current_tenant` yourself, requires you to declare `set_current_tenant_through_filter` at the top of your application_controller to tell acts_as_tenant that you are going to use a before_action to setup the current tenant. Next you should actually setup that before_action to fetch the current tenant and pass it to `acts_as_tenant` by using `set_current_tenant(current_tenant)` in the before_action.
 
+If you are setting the tenant in a specific controller (except `application_controller`), it should to be included **AT THE TOP** of the file.
 
-### Setting the current tenant for a block ###
+```ruby
+class MembersController < ActionController::Base
+  set_current_tenant_through_filter
+  before_action :set_tenant
+  before_action :set_member, only: [:show, :edit, :update, :destroy]
+
+  def set_tenant
+    set_current_tenant(current_user.account)
+  end
+end
+```
+
+This allows the tenant to be set before any other code runs so everything is within the current tenant.
+
+### Setting the current tenant for a block
 
 ```ruby
 ActsAsTenant.with_tenant(current_account) do
@@ -83,16 +130,27 @@ any code in this block will be scoped to the current tenant. All methods that se
 
 **Note:** If the current tenant is not set by one of these methods, Acts_as_tenant will be unable to apply the proper scope to your models. So make sure you use one of the two methods to tell acts_as_tenant about the current tenant.
 
-### Disabling tenant checking for a block ###
+### Disabling tenant checking for a block
 
 ```ruby
 ActsAsTenant.without_tenant do
   # Tenant checking is disabled for all code in this block
 end
 ```
+
 This is useful in shared routes such as admin panels or internal dashboards when `require_tenant` option is enabled throughout the app.
 
-### Require tenant to be set always ###
+### Allowing tenant updating for a block
+
+```ruby
+ActsAsTenant.with_mutable_tenant do
+  # Tenant updating is enabled for all code in this block
+end
+```
+
+This will allow you to change the tenant of a model. This feature is useful for admin screens, where it is ok to allow certain users to change the tenant on existing models in specific cases.
+
+### Require tenant to be set always
 
 If you want to require the tenant to be set at all times, you can configure acts_as_tenant to raise an error when a query is made without a tenant available. See below under configuration options.
 
@@ -100,14 +158,14 @@ Scoping your models
 -------------------
 
 ```ruby
-class AddAccountToUsers < ActiveRecord::Migration
+class AddAccountToProjects < ActiveRecord::Migration
   def up
-    add_column :users, :account_id, :integer
-    add_index  :users, :account_id
+    add_column :projects, :account_id, :integer
+    add_index  :projects, :account_id
   end
 end
 
-class User < ActiveRecord::Base
+class Project < ActiveRecord::Base
   acts_as_tenant(:account)
 end
 ```
@@ -139,7 +197,9 @@ Project.tasks.all #  => all tasks with account_id => 3
 
 Acts_as_tenant uses Rails' `default_scope` method to scope models. Rails 3.1 changed the way `default_scope` works in a good way. A user defined `default_scope` should integrate seamlessly with the one added by `acts_as_tenant`.
 
-### Validating attribute uniqueness ###
+You should call `acts_as_tenant` after any `belongs_to` associations in your model.
+
+### Validating attribute uniqueness
 
 If you need to validate for uniqueness, chances are that you want to scope this validation to a tenant. You can do so by using:
 
@@ -149,44 +209,132 @@ validates_uniqueness_to_tenant :name, :email
 
 All options available to Rails' own `validates_uniqueness_of` are also available to this method.
 
-### Custom foreign_key ###
+### Custom foreign_key
 
-You can explicitely specifiy a foreign_key for AaT to use should the key differ from the default:
+You can explicitly specifiy a foreign_key for AaT to use should the key differ from the default:
 
 ```ruby
-acts_as_tenant(:account, :foreign_key => 'accountID) # by default AaT expects account_id
+acts_as_tenant(:account, :foreign_key => 'accountID') # by default AaT expects account_id
 ```
 
-### Custom primary_key ###
+### Custom primary_key
 
-You can also explicitely specifiy a primary_key for AaT to use should the key differ from the default:
+You can also explicitly specifiy a primary_key for AaT to use should the key differ from the default:
 
 ```ruby
 acts_as_tenant(:account, :primary_key => 'primaryID') # by default AaT expects id
 ```
 
+### Has and belongs to many
+
+You can scope a model that is part of a HABTM relationship by using the `through` option.
+
+```ruby
+class Organisation < ActiveRecord::Base
+  has_many :organisations_users
+  has_many :users, through: :organisations_users
+end
+
+class User < ActiveRecord::Base
+  has_many :organisations_users
+  acts_as_tenant :organisation, through: :organisations_users
+end
+
+class OrganisationsUser < ActiveRecord::Base
+  belongs_to :user
+  acts_as_tenant :organisation
+end
+```
+
 Configuration options
 ---------------------
+
 An initializer can be created to control (currently one) option in ActsAsTenant. Defaults
 are shown below with sample overrides following. In `config/initializers/acts_as_tenant.rb`:
 
 ```ruby
 ActsAsTenant.configure do |config|
   config.require_tenant = false # true
+
+  # Customize the query for loading the tenant in background jobs
+  config.job_scope = ->{ all }
 end
 ```
 
 * `config.require_tenant` when set to true will raise an ActsAsTenant::NoTenant error whenever a query is made without a tenant set.
 
-Sidekiq support
----------------
+`config.require_tenant` can also be assigned a lambda that is evaluated at run time. For example:
 
-ActsAsTenant supports [Sidekiq](http://sidekiq.org/). A background processing library.
-Add the following code to your `config/initializers/acts_as_tenant.rb`:
+```ruby
+ActsAsTenant.configure do |config|
+  config.require_tenant = lambda do
+    if $request_env.present?
+      return false if $request_env["REQUEST_PATH"].start_with?("/admin/")
+    end
+  end
+end
+```
+
+`ActsAsTenant.should_require_tenant?` is used to determine if a tenant is required in the current context, either by evaluating the lambda provided, or by returning the boolean value assigned to `config.require_tenant`.
+
+When using `config.require_tenant` alongside the `rails console`, a nice quality of life tweak is to set the tenant in the console session in your initializer script. For example in `config/initializers/acts_as_tenant.rb`:
+
+```ruby
+SET_TENANT_PROC = lambda do
+  if defined?(Rails::Console)
+    puts "> ActsAsTenant.current_tenant = Account.first"
+    ActsAsTenant.current_tenant = Account.first
+  end
+end
+
+Rails.application.configure do
+  if Rails.env.development?
+    # Set the tenant to the first account in development on load
+    config.after_initialize do
+      SET_TENANT_PROC.call
+    end
+
+    # Reset the tenant after calling 'reload!' in the console
+    ActiveSupport::Reloader.to_complete do
+      SET_TENANT_PROC.call
+    end
+  end
+end
+```
+
+belongs_to options
+------------------
+
+`acts_as_tenant :account` includes the belongs_to relationship.
+So when using acts_as_tenant on a model, do not add `belongs_to :account` alongside `acts_as_tenant :account`:
+
+```ruby
+class User < ActiveRecord::Base
+  acts_as_tenant(:account) # YES
+  belongs_to :account # REDUNDANT
+end
+```
+
+You can add the following `belongs_to` options to `acts_as_tenant`:
+`:foreign_key, :class_name, :inverse_of, :optional, :primary_key, :counter_cache, :polymorphic, :touch`
+
+Example: `acts_as_tenant(:account, counter_cache: true)`
+
+Background Processing libraries
+-------------------------------
+
+ActsAsTenant supports
+
+- ActiveJob - ActsAsTenant will automatically save the current tenant in ActiveJob arguments and set it when the job runs.
+
+- [Sidekiq](//sidekiq.org/)
+Add the following code to `config/initializers/acts_as_tenant.rb`:
 
 ```ruby
 require 'acts_as_tenant/sidekiq'
 ```
+
+- DelayedJob - [acts_as_tenant-delayed_job](https://github.com/nunommc/acts_as_tenant-delayed_job)
 
 Testing
 ---------------
@@ -203,15 +351,14 @@ Rails.application.configure do
   config.middleware.use ActsAsTenant::TestTenantMiddleware
 end
 ```
-
 ```ruby
 # spec_helper.rb
-config.before(:suite) do
+config.before(:suite) do |example|
   # Make the default tenant globally available to the tests
   $default_account = Account.create!
 end
 
-config.before(:each) do
+config.before(:each) do |example|
   if example.metadata[:type] == :request
     # Set the `test_tenant` value for integration tests
     ActsAsTenant.test_tenant = $default_account
@@ -221,35 +368,40 @@ config.before(:each) do
   end
 end
 
-config.after(:each) do
+config.after(:each) do |example|
   # Clear any tenancy that might have been set
   ActsAsTenant.current_tenant = nil
   ActsAsTenant.test_tenant = nil
 end
 ```
-
-To Do
------
-* ...
-
 Bug reports & suggested improvements
 ------------------------------------
+
 If you have found a bug or want to suggest an improvement, please use our issue tracked at:
 
 [github.com/ErwinM/acts_as_tenant/issues](http://github.com/ErwinM/acts_as_tenant/issues)
 
 If you want to contribute, fork the project, code your improvements and make a pull request on [Github](http://github.com/ErwinM/acts_as_tenant/). When doing so, please don't forget to add tests. If your contribution is fixing a bug it would be perfect if you could also submit a failing test, illustrating the issue.
 
-Help maintain this gem
-----------------------
-I myself, do not work with RoR much anymore. As a result, I only check this repo a few times a year. If anyone wants to help me maintain this gem on a more regular basis, shoot me a message!
+Contributing to this gem
+------------------------
+
+We use the Appraisal gem to run tests against supported versions of Rails to test for compatibility against them all. StandardRb also helps keep code formatted cleanly.
+
+1. Fork the repo
+2. Make changes
+3. Run test suite with `bundle exec appraisal`
+4. Run `bundle exec standardrb` to standardize code formatting
+5. Submit a PR
 
 Author & Credits
 ----------------
-acts_as_tenant is written by Erwin Matthijssen.
+
+acts_as_tenant is written by Erwin Matthijssen & Chris Oliver.
 
 This gem was inspired by Ryan Sonnek's [Multitenant](https://github.com/wireframe/multitenant) gem and its use of default_scope.
 
 License
 -------
+
 Copyright (c) 2011 Erwin Matthijssen, released under the MIT license

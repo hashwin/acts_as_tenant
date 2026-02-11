@@ -9,11 +9,7 @@ module ActsAsTenant
     class NoTenantSet < ActsAsTenant::Error
     end
 
-    class ModelNotScopedByTenant < ActsAsTenant::Error
-    end
-
     class TenantIsImmutable < ActsAsTenant::Error
     end
-
   end
 end

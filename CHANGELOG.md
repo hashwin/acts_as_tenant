@@ -1,3 +1,84 @@
+Unreleased
+----------
+
+* Add `config.tenant_change_hook` callback when a tenant changes. [#333](https://github.com/ErwinM/acts_as_tenant/pull/333)
+
+This can be used to implement Postgres's row-level security for example
+
+```ruby
+ActsAsTenant.configure do |config|
+  config.tenant_change_hook = lambda do |tenant|
+    if tenant.present?
+      ActiveRecord::Base.connection.execute(ActiveRecord::Base.sanitize_sql_array(["SET rls.account_id = ?;", tenant.id]))
+      Rails.logger.info "Changed tenant to " + [tenant.id, tenant.name].to_json
+    end
+  end
+end
+```
+
+1.0.1
+-----
+
+* Cast GID to string for job args #326
+
+1.0.0
+-----
+
+* [Breaking] Drop Rails 5.2 support
+* Set current_tenant with ActiveJob automatically #319
+* Replace RequestStore dependency with CurrentAttributes. #313 - @excid3
+* Add `scope` support to `acts_as_tenant :account, ->{ with_deleted }` #282 - @adrian-gomez
+  The scope will be forwarded to `belongs_to`.
+* Add `job_scope` configuration to customize how tenants are loaded in background jobs - @excid3
+  This is helpful for situations like soft delete:
+
+```ruby
+ActsAsTenant.configure do |config|
+  config.job_scope = ->{ with_deleted }
+end
+```
+
+0.6.1
+-----
+
+* Add `touch` for `belongs_to` association #306
+
+0.6.0
+-----
+
+* Add `ActsAsTenant.with_mutable_tenant` for allowing tenants to be changed within a block #230
+
+0.5.3
+-----
+
+* Add support for Sidekiq 7 - @excid3
+* Fix global record validations with existing scope #294 - @mikecmpbll
+
+0.5.2
+-----
+
+* `test_tenant` uses current thread for parallel testing - @mikecmpbll
+* Reset `test_tenant` in `with_tenant` - @hakimaryan
+* Add `acts_as_tenant through:` option for HABTM - @scarhand
+* Allow callable object (lambda, proc, block, etc) for `require_tenant` - @cmer
+
+0.5.1
+-----
+
+* Use `klass` from Rails association instead of our own custom lookup - @bramjetten
+
+0.5.0
+-----
+
+* Drop support for Rails 5.1 or earlier
+* Add tests for Rails 5.2, 6.0, and Rails master
+* Use standardrb
+* Refactor controller extensions into modules
+* Add `subdomain_lookup` option to change which subdomain is used - @excid3
+* Unsaved tenant records will now return no records. #227 - @excid3
+* Refactor test suite and use dummy Rails app - @excid3
+* Remove tenant getter override. Fixes caching issues with association. - @bernardeli
+
 0.4.4
 -----
 * Implement support for polymorphic tenant
