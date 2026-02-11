@@ -21,8 +21,13 @@ module ActsAsTenant
             raise ActsAsTenant::Errors::NoTenantSet
           end
 
-          if ActsAsTenant.current_tenant
+          associated_class_name = reflect_on_all_associations(:belongs_to).find { |association| association.foreign_key == fkey }.class_name
+          should_scope_tenant = options[:polymorphic] || ActsAsTenant.current_tenant.class.name == associated_class_name
+
+          if ActsAsTenant.current_tenant && should_scope_tenant
+          # if ActsAsTenant.current_tenant
             keys = [ActsAsTenant.current_tenant.send(pkey)].compact
+
             keys.push(nil) if options[:has_global_records]
 
             if options[:through]
