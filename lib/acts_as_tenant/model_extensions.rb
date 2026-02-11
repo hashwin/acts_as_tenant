@@ -24,8 +24,14 @@ module ActsAsTenant
           associated_class_name = reflect_on_all_associations(:belongs_to).find { |association| association.foreign_key == fkey }.class_name
           should_scope_tenant = options[:polymorphic] || ActsAsTenant.current_tenant.class.name == associated_class_name
 
+          if ActsAsTenant.current_tenant && !should_scope_tenant
+            Rails.logger.warn(
+              "[ActsAsTenant] Current tenant is an instance of #{ActsAsTenant.current_tenant.class}, but #{name} expects #{associated_class_name}. " \
+              "Tenant scoping is being skipped for #{name}."
+            )
+          end
+
           if ActsAsTenant.current_tenant && should_scope_tenant
-          # if ActsAsTenant.current_tenant
             keys = [ActsAsTenant.current_tenant.send(pkey)].compact
 
             keys.push(nil) if options[:has_global_records]
