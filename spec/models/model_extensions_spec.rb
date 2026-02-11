@@ -105,7 +105,6 @@ describe ActsAsTenant do
 
     it "should not scope when current tenant class does not match the association class" do
       ActsAsTenant.current_tenant = Article.create!(title: "test")
-      expect(Rails.logger).to receive(:warn).at_least(:once)
       expect(Project.count).to eq(Project.unscoped.count)
     end
 
