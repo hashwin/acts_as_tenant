@@ -26,7 +26,7 @@ module ActsAsTenant
           should_scope_tenant = options[:polymorphic] || ActsAsTenant.current_tenant.is_a?(associated_class_name.constantize)
 
           if ActsAsTenant.current_tenant && !should_scope_tenant
-            Rails.logger.debug {
+            Rails.logger.warn {
               "[ActsAsTenant] Current tenant is an instance of #{ActsAsTenant.current_tenant.class}, but #{name} expects #{associated_class_name}. " \
               "Tenant scoping is being skipped for #{name}."
             }
@@ -57,10 +57,11 @@ module ActsAsTenant
         #
         before_validation proc { |m|
           if ActsAsTenant.current_tenant
+            should_set_tenant = options[:polymorphic] || ActsAsTenant.current_tenant.is_a?(associated_class_name.constantize)
             if options[:polymorphic]
               m.send("#{fkey}=".to_sym, ActsAsTenant.current_tenant.class.to_s) if m.send(fkey.to_s).nil?
               m.send("#{polymorphic_type}=".to_sym, ActsAsTenant.current_tenant.class.to_s) if m.send(polymorphic_type.to_s).nil?
-            else
+            elsif should_set_tenant
               m.send "#{fkey}=".to_sym, ActsAsTenant.current_tenant.send(pkey)
             end
           end

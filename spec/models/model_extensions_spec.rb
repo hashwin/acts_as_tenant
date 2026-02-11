@@ -105,8 +105,16 @@ describe ActsAsTenant do
 
     it "should not scope when current tenant class does not match the association class" do
       ActsAsTenant.current_tenant = Article.create!(title: "test")
-      expect(Rails.logger).to receive(:debug).at_least(:once)
+      expect(Rails.logger).to receive(:warn).at_least(:once)
       expect(Project.count).to eq(Project.unscoped.count)
+    end
+
+    it "should not set tenant foreign key on create when current tenant class does not match" do
+      article = Article.create!(title: "test")
+      ActsAsTenant.current_tenant = article
+      allow(Rails.logger).to receive(:warn)
+      project = Project.create!(name: "mismatched_tenant")
+      expect(project.account_id).to be_nil
     end
   end
 
